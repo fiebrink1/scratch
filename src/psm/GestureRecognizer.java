@@ -1,5 +1,5 @@
 /*
- * Interface for classes that recognize gestures (i.e., DTW)
+ * Interface for classes that recognize gestures
  * 
  */
 package psm;
@@ -110,7 +110,7 @@ public interface GestureRecognizer {
 
     void startRecording();
 
-    void startRunningContinuous();
+    void startRunning();
 
     void stopRecording();
 

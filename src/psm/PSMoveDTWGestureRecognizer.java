@@ -1,5 +1,5 @@
 /*
- * Implements Dynamic Time Warping for PSMove Gesture Recognizer
+ * Implements Dynamic Time Warping for PSMove Gesture Recognizer -- does the heavy lifting. Shouldn't need to edit this.
  * 
  */
 package psm;
@@ -8,16 +8,20 @@ import com.dtw.TimeWarpInfo;
 import com.illposed.osc.OSCListener;
 import com.illposed.osc.OSCMessage;
 import com.illposed.osc.OSCPortIn;
+import com.illposed.osc.OSCPortOut;
 import com.timeseries.TimeSeries;
 import com.timeseries.TimeSeriesPoint;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.*;
+import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.EventListenerList;
@@ -28,9 +32,15 @@ import javax.swing.event.EventListenerList;
  */
 public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
 
-    protected int receivePort = 6448; //Send PSMove motion data via osc to this port
+    protected int receivePort = 6448; //Send PSMove motion data via osc to this port. Set this in constructor.
     protected String oscReceiveMessage = "/oscCustomFeatures"; //Send PSMove motion data via osc using this message name
+    protected int sendPort = 6449;
+    protected OSCPortOut sender;
+    protected InetAddress sendToHost;
+    protected String oscSendMessage = "/gesturePerformed";
     
+    
+
     protected int matchWidth = 5; //This could be changed to tweak DTW behavior
     protected int minAllowedGestureLength = 5; //This could be changed to tweak DTW behavior
      
@@ -52,6 +62,8 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
     protected double maxDistance;
     protected int continuousMatch; //identity of closest matching class (-1 if no class is above match threshold)
     protected OSCPortIn receiver;
+            
+
     protected RecordingState recordingState = RecordingState.NOT_RECORDING;
     protected RunningState runningState = RunningState.NOT_RUNNING;
     private PropertyChangeSupport propertyChangeSupport = new PropertyChangeSupport(this);
@@ -59,21 +71,29 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
     private ChangeEvent changeEvent = null;
 
     // Create new recognizer for # features (e.g., 9 for PS Move), numClasses (e.g., 4 gesture types)
-    public PSMoveDTWGestureRecognizer(int numFeatures, int numClasses) throws SocketException, UnknownHostException, Exception {
+    public PSMoveDTWGestureRecognizer(int numFeatures, int numClasses, int receivePort, int sendPort, InetAddress sendToHost) throws SocketException, UnknownHostException, Exception {
         this.numClasses = numClasses;
+        this.numFeatures = numFeatures;
+        this.receivePort = receivePort;
+        this.sendToHost = sendToHost;
+        this.sendPort = sendPort;
         isClassActive = new boolean[numClasses];
         for (int i = 0; i < isClassActive.length; i++) {
             isClassActive[i] = true;
         }
-        addOscListeners();
-        allseries = new ArrayList<LinkedList<TimeSeries>>(numClasses);
-        distanceToClasses = new double[numClasses];
-        for (int i = 0; i < numClasses; i++) {
-            LinkedList<TimeSeries> l = new LinkedList<TimeSeries>();
-            allseries.add(l);
-            distanceToClasses[i] = Double.MAX_VALUE;
-        }
+        initialize();
     }
+   
+    
+    /* Call this constructor if you want to load from a file */
+    public PSMoveDTWGestureRecognizer(File f, int receivePort, int sendPort, InetAddress sendToHost) throws SocketException, UnknownHostException, Exception {
+        this.receivePort = receivePort;
+        this.sendPort = sendPort;
+        this.sendToHost = sendToHost;
+        initialize();
+        loadFromFile(f);
+    }
+   
 
     
     //Phoenix: See this as an example of using ChangeListener to implement observers
@@ -109,6 +129,20 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
         LinkedList<TimeSeries> ts = allseries.get(classNum);
         if (ts.size() > 0) {
             ts.removeLast();
+        }
+    }
+    
+        
+    private void initialize() throws SocketException, UnknownHostException, Exception {
+        addOscListeners();
+        sender = new OSCPortOut(sendToHost, sendPort);
+        
+        allseries = new ArrayList<LinkedList<TimeSeries>>(numClasses);
+        distanceToClasses = new double[numClasses];
+        for (int i = 0; i < numClasses; i++) {
+            LinkedList<TimeSeries> l = new LinkedList<TimeSeries>();
+            allseries.add(l);
+            distanceToClasses[i] = Double.MAX_VALUE;
         }
     }
 
@@ -210,7 +244,6 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
         listToClear.clear();
     }
 
-
     protected void updateExampleSizeStats() {
         minSizeInExamples = minAllowedGestureLength;
         maxSizeInExamples = 0;
@@ -227,17 +260,18 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
         }
     }
 
-    public void startRunningContinuous() {
+    /* Start running -- looking for gestures & doing analysis */
+    public void startRunning() {
         if (runningState != RunningState.RUNNING) {
             //Note: For now, this should be fine even if classifier is untrained / no data.
             setRunningState(RunningState.RUNNING);
             currentTime = 0;
             currentTs = new TimeSeries(numFeatures);
             updateExampleSizeStats();
-
         }
     }
 
+    // Update our knowledge of the max distance between gestures in our training set
     protected void updateMaxDistance() {
         //Update threshold info
         double maxDist = 0.0;
@@ -290,6 +324,7 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
         setMaxDistance(maxDist);
     }
 
+    /* Stop running */
     public void stopRunning() {
         if (runningState == RunningState.RUNNING) {
             setRunningState(RunningState.NOT_RUNNING);
@@ -300,6 +335,7 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
         return recordingState;
     }
 
+    /* Start recording a new gesture */
     public void startRecording() {
         if (recordingState == RecordingState.NOT_RECORDING) {
             setRecordingState(RecordingState.RECORDING);
@@ -309,6 +345,7 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
         }
     }
 
+    /* Stop recording the new gesture */
     public void stopRecording() {
         if (recordingState == RecordingState.RECORDING) {
             setRecordingState(RecordingState.NOT_RECORDING);
@@ -447,12 +484,27 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
         if (closestDist < matchThreshold) {
             // System.out.println("MATCHES " + closestClass);
             setContinuousMatch(closestClass);
+            sendOsc(closestClass);
         } else {
             // System.out.println("NO Match");
             setContinuousMatch(-1);
         }
     }
 
+    
+    protected void sendOsc(int match) {
+        Object[] o = new Object[1];
+        o[0] = match;
+        OSCMessage msg = new OSCMessage(oscSendMessage, o);
+        try {
+              sender.send(msg);
+              //System.out.println("Osc message sent");
+        } catch (IOException ex) {
+              Logger.getLogger(PsMoveGestureRecognizerTrainingGUI.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+    
+    
     protected List<TimeSeries> getCandidateSeries(TimeSeries t, int minSize, int maxSize) {
         List<TimeSeries> l = new LinkedList<TimeSeries>();
         //hop size = 1

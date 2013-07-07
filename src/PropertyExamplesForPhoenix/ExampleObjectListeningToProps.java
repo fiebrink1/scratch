@@ -15,8 +15,7 @@ public class ExampleObjectListeningToProps {
     public static void main(String[] args) {
         
         ExampleObjectWithProps obj = new ExampleObjectWithProps();
-        
-        
+
         obj.addPropertyChangeListener(new PropertyChangeListener() {
 
             @Override
@@ -28,14 +27,9 @@ public class ExampleObjectListeningToProps {
                     
                 }
             }
-        });
-        
-        
-        obj.setMyIntProperty(10);
-        
-        
+        });   
+        obj.setMyIntProperty(10);        
         obj.setMyAwesomeString("new value");
-       
-        
+
     }
 }

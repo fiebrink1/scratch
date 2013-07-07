@@ -1,7 +1,5 @@
 /*
- * This is the main GUI for the finger therapy. Runs for both DTW
- * (gesture recognition) and target acquisition; can drive either game using
- * simulated key presses or music (by sending OSC messages to ChucK)
+ * This is the main GUI for training DTW gesture recognition. You shouldn't need to edit this.
  */
 
 /*
@@ -11,16 +9,11 @@
  */
 package psm;
 
-import psm.util.FileChooserWithExtension;
 import com.illposed.osc.OSCMessage;
 import com.illposed.osc.OSCPortOut;
 import java.awt.AWTException;
 import java.awt.Dimension;
 import java.awt.GridLayout;
-import java.awt.Robot;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
@@ -32,11 +25,11 @@ import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.UIManager;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import psm.util.FileChooserWithExtension;
 
 /**
  *
@@ -44,31 +37,32 @@ import javax.swing.event.ChangeListener;
  */
 public class PsMoveGestureRecognizerTrainingGUI extends javax.swing.JFrame {
 
-    Robot robot;
     PSMoveDTWGestureRecognizer analyzer;
+    
     int numClasses = 4;
     int numFeatures = 9;
+    int receivePort = 6448; //Place to receive OSC messages about PSMove state
+    int sendPort = 6449; //Place to send OSC messages about gesture analysis results
+
+    
     String[] actionOptions;
     String[] gestureNames;
     GestureRow[] rows;
     int numCurrentRows = 0;
-    int sendPort = 6449;
-    OSCPortOut sender;
     protected boolean constantTrigger = false;
-
 
     private void updateGUIForLoadedGestureRecognizer() {
         numClasses = analyzer.numClasses;
         numFeatures = analyzer.numFeatures;
         double loadedThreshold = analyzer.getMatchThreshold();
-        System.out.println("In update, thresh is " + loadedThreshold);
+       // System.out.println("In update, thresh is " + loadedThreshold);
         double newDist = analyzer.getMaxDistance();
         if (newDist > analyzer.getMatchThreshold()) {
               sliderThreshold.setMaximum((int) (100 * newDist) + 1);
         } else {
               sliderThreshold.setMaximum((int) (100 * analyzer.getMatchThreshold()) + 1);
         }
-        System.out.println("Slider max set to " + sliderThreshold.getMaximum() * .01);
+     //   System.out.println("Slider max set to " + sliderThreshold.getMaximum() * .01);
 
         int match = analyzer.getContinuousMatch();
                     updateStatusBars(match);
@@ -86,50 +80,22 @@ public class PsMoveGestureRecognizerTrainingGUI extends javax.swing.JFrame {
     
     }
 
-    //What do you want to do with it?
-    public enum ControlMode {
-
-        DIRECTION_PAD,
-        MUSIC_TRIGGER
-    };
-
-    //Use DTW or just look for targets?
-    public enum AnalysisMode {
-        DTW,
-        TARGET
-    };
-    protected ControlMode controlMode = ControlMode.DIRECTION_PAD;
-    protected AnalysisMode analysisMode = AnalysisMode.DTW;
-
     /** Creates new form PsMoveGestureRecognizerTrainingGUI */
     public PsMoveGestureRecognizerTrainingGUI(String[] gestureNames, final boolean constantTrigger) throws SocketException, UnknownHostException, AWTException, Exception {
-
         initComponents();
         this.constantTrigger = constantTrigger;
         labelSaveLoadStatus.setText("");
         panelDebug.setVisible(false);
         this.gestureNames = new String[gestureNames.length];
         System.arraycopy(gestureNames, 0, this.gestureNames, 0, gestureNames.length);
-
-        this.controlMode = ControlMode.MUSIC_TRIGGER;
         actionOptions = new String[1];
         actionOptions[0] = "MusicTrigger";
-        sender = new OSCPortOut(InetAddress.getLocalHost(), sendPort);
-
-
         this.numClasses = gestureNames.length;
-        this.analysisMode = AnalysisMode.DTW;
-
-        addRows();
-
-        robot = new Robot();
-        
-        analyzer = new PSMoveDTWGestureRecognizer(numFeatures, numClasses);
-        panelSelectJoints.setVisible(false);
-        repaint();
-        
+        addRows(); 
+        InetAddress host = InetAddress.getLocalHost();
+        analyzer = new PSMoveDTWGestureRecognizer(numFeatures, numClasses, receivePort, sendPort, host);
         attachAnalyzer();
-    
+        repaint();
     }
     
     private void attachAnalyzer() {
@@ -209,21 +175,9 @@ public class PsMoveGestureRecognizerTrainingGUI extends javax.swing.JFrame {
 
     //Called only initially on change (not repeatedly)
     private void useClassificationResult(int match) {
-
-       // else if (controlMode == ControlMode.MUSIC_TRIGGER) {
-            if (match != -1) {
-
-                Object[] o = new Object[1];
-                o[0] = match;
-
-                OSCMessage msg = new OSCMessage("/MoveGesture", o);
-                try {
-                    sender.send(msg);
-                } catch (IOException ex) {
-                    Logger.getLogger(PsMoveGestureRecognizerTrainingGUI.class.getName()).log(Level.SEVERE, null, ex);
-                }
-            }
-        
+       if (match != -1) {
+            System.out.println("New gesture detected: " + match);
+       }
     }
 
     private void updateDistances(double[] lastDistances) {
@@ -275,10 +229,6 @@ public class PsMoveGestureRecognizerTrainingGUI extends javax.swing.JFrame {
         buttonStartStop = new javax.swing.JToggleButton();
         jPanel5 = new javax.swing.JPanel();
         sliderThreshold = new javax.swing.JSlider();
-        panelSelectJoints = new javax.swing.JPanel();
-        jCheckBox1 = new javax.swing.JCheckBox();
-        jCheckBox3 = new javax.swing.JCheckBox();
-        jCheckBox2 = new javax.swing.JCheckBox();
         panelDebug = new javax.swing.JPanel();
         jButton1 = new javax.swing.JButton();
         jTextField1 = new javax.swing.JTextField();
@@ -510,59 +460,6 @@ public class PsMoveGestureRecognizerTrainingGUI extends javax.swing.JFrame {
 
         getContentPane().add(jPanel2);
 
-        panelSelectJoints.setBackground(new java.awt.Color(255, 255, 255));
-        panelSelectJoints.setBorder(javax.swing.BorderFactory.createTitledBorder(null, "Select Active Joints", javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION, javax.swing.border.TitledBorder.DEFAULT_POSITION, new java.awt.Font("Verdana", 0, 14))); // NOI18N
-
-        jCheckBox1.setBackground(new java.awt.Color(255, 255, 255));
-        jCheckBox1.setSelected(true);
-        jCheckBox1.setText("Joint1");
-        jCheckBox1.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jCheckBox1ActionPerformed(evt);
-            }
-        });
-
-        jCheckBox3.setBackground(new java.awt.Color(255, 255, 255));
-        jCheckBox3.setSelected(true);
-        jCheckBox3.setText("Joint2");
-        jCheckBox3.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jCheckBox3ActionPerformed(evt);
-            }
-        });
-
-        jCheckBox2.setBackground(new java.awt.Color(255, 255, 255));
-        jCheckBox2.setSelected(true);
-        jCheckBox2.setText("Joint3");
-        jCheckBox2.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                jCheckBox2ActionPerformed(evt);
-            }
-        });
-
-        org.jdesktop.layout.GroupLayout panelSelectJointsLayout = new org.jdesktop.layout.GroupLayout(panelSelectJoints);
-        panelSelectJoints.setLayout(panelSelectJointsLayout);
-        panelSelectJointsLayout.setHorizontalGroup(
-            panelSelectJointsLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(panelSelectJointsLayout.createSequentialGroup()
-                .addContainerGap()
-                .add(jCheckBox1)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(jCheckBox3)
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(jCheckBox2)
-                .addContainerGap(473, Short.MAX_VALUE))
-        );
-        panelSelectJointsLayout.setVerticalGroup(
-            panelSelectJointsLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(panelSelectJointsLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
-                .add(jCheckBox1)
-                .add(jCheckBox3)
-                .add(jCheckBox2))
-        );
-
-        getContentPane().add(panelSelectJoints);
-
         panelDebug.setBackground(new java.awt.Color(255, 255, 255));
         panelDebug.setBorder(javax.swing.BorderFactory.createTitledBorder(null, "Debug", javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION, javax.swing.border.TitledBorder.DEFAULT_POSITION, new java.awt.Font("Verdana", 0, 14))); // NOI18N
 
@@ -597,7 +494,7 @@ public class PsMoveGestureRecognizerTrainingGUI extends javax.swing.JFrame {
                     .add(jButton1)
                     .add(jTextField1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 30, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                     .add(jButton2))
-                .addContainerGap(44, Short.MAX_VALUE))
+                .addContainerGap(64, Short.MAX_VALUE))
         );
 
         getContentPane().add(panelDebug);
@@ -641,7 +538,7 @@ public class PsMoveGestureRecognizerTrainingGUI extends javax.swing.JFrame {
                     .add(buttonSave)
                     .add(buttonLoad)
                     .add(labelSaveLoadStatus))
-                .addContainerGap(14, Short.MAX_VALUE))
+                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
 
         getContentPane().add(panelFileManagement);
@@ -652,7 +549,7 @@ public class PsMoveGestureRecognizerTrainingGUI extends javax.swing.JFrame {
     private void activateStopButton(boolean a) {
         if (a) {
             buttonStartStop.setText("Stop");
-            analyzer.startRunningContinuous();
+            analyzer.startRunning();
             if (!buttonStartStop.isSelected()) {
                 buttonStartStop.setSelected(true);
             }
@@ -681,20 +578,7 @@ public class PsMoveGestureRecognizerTrainingGUI extends javax.swing.JFrame {
         }
     }//GEN-LAST:event_sliderThresholdStateChanged
 
-    private void jCheckBox1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jCheckBox1ActionPerformed
-        updateFeatures();
-}//GEN-LAST:event_jCheckBox1ActionPerformed
-
-    private void jCheckBox3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jCheckBox3ActionPerformed
-        updateFeatures();
-}//GEN-LAST:event_jCheckBox3ActionPerformed
-
-    private void jCheckBox2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jCheckBox2ActionPerformed
-        updateFeatures();
-}//GEN-LAST:event_jCheckBox2ActionPerformed
-
     private void buttonSaveActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonSaveActionPerformed
-        // TODO add your handling code here:
         JFrame frame = new JFrame();
         //frame.setPreferredSize(new Dimension(478, 532));
         frame.setSize(new Dimension(478, 532));
@@ -712,11 +596,8 @@ public class PsMoveGestureRecognizerTrainingGUI extends javax.swing.JFrame {
             } catch (IOException ex) {
                 System.out.println("Problem encountered writing to file");
                 Logger.getLogger(PsMoveGestureRecognizerTrainingGUI.class.getName()).log(Level.SEVERE, null, ex);
-            }
-        
-                
-        }
-        
+            }    
+        }       
     }//GEN-LAST:event_buttonSaveActionPerformed
 
     private void buttonLoadActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonLoadActionPerformed
@@ -730,36 +611,22 @@ public class PsMoveGestureRecognizerTrainingGUI extends javax.swing.JFrame {
         File file = null;
         if (returnVal == FileChooserWithExtension.APPROVE_OPTION) {
             file = fc.getSelectedFile();
-          //  PSMoveDTWGestureRecognizer gr = null;
-
             try {
                 analyzer.loadFromFile(file);
                 for (int i = 0; i < analyzer.numClasses; i++) {
                     rows[i].setNumExamples(analyzer.getNumExamples(i));
                 }
+                updateGUIForLoadedGestureRecognizer();
                 labelSaveLoadStatus.setText("Read successfully from file");
                 
             } catch (Exception ex) {
                 System.out.println("Error reading from file:");
                 ex.printStackTrace();
                 labelSaveLoadStatus.setText("Error reading from file");
-            }
-          //  if (gr != null) {
-                updateGUIForLoadedGestureRecognizer();
-          //  }
-                
+            }      
         }
     }//GEN-LAST:event_buttonLoadActionPerformed
 
-    private void updateFeatures() {
-     /*   if (analysisMode == analysisMode.TARGET) {
-            boolean enabled[] = new boolean[3];
-            enabled[0] = jCheckBox1.isSelected();
-            enabled[1] = jCheckBox2.isSelected();
-            enabled[2] = jCheckBox3.isSelected();
-            ((Targeter) analyzer).setEnabledFeatures(enabled);
-        } */
-    }
 
     /**
      * To run from command line: Default is target acquisition + game control;
@@ -785,13 +652,8 @@ public class PsMoveGestureRecognizerTrainingGUI extends javax.swing.JFrame {
                 PsMoveGestureRecognizerTrainingGUI gui;
                 String[] names = {"Gesture1", "Gesture2", "Gesture3", "Gesture4"};
                 try {
-                    //if (doDtw) {
                         gui = new PsMoveGestureRecognizerTrainingGUI(names, true);
-                    //} else {
-
-                        //gui = new PsMoveGestureRecognizerTrainingGUI(names, ControlMode.DIRECTION_PAD, AnalysisMode.TARGET, true);
-
-                    //}
+                    
                 } catch (Exception ex) {
                     System.out.println("Error encountered in running GUI: ");
                     ex.printStackTrace();
@@ -803,10 +665,8 @@ public class PsMoveGestureRecognizerTrainingGUI extends javax.swing.JFrame {
     }
 
     private GestureRow addRow(String name, final int rowNum, int selectedAction) {
-        String[] s1 = actionOptions;
-        final GestureRow r = new GestureRow(name, 0, s1);
+        final GestureRow r = new GestureRow(name, 0);
         r.setActive(false);
-        r.selectAction(selectedAction);
         panelExamples.add(r, rowNum);
 
         r.addAddButtonMouseListener(new MouseAdapter() {
@@ -843,13 +703,6 @@ public class PsMoveGestureRecognizerTrainingGUI extends javax.swing.JFrame {
             }
         });
 
-        r.addActionChoiceListener(new ActionListener() {
-
-            public void actionPerformed(ActionEvent ae) {
-
-            }
-        });
-
         r.addPropertyChangeListener(new PropertyChangeListener() {
 
             public void propertyChange(PropertyChangeEvent pce) {
@@ -874,9 +727,6 @@ public class PsMoveGestureRecognizerTrainingGUI extends javax.swing.JFrame {
     private psm.GestureRow gestureRow3;
     private javax.swing.JButton jButton1;
     private javax.swing.JButton jButton2;
-    private javax.swing.JCheckBox jCheckBox1;
-    private javax.swing.JCheckBox jCheckBox2;
-    private javax.swing.JCheckBox jCheckBox3;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
     private javax.swing.JLabel jLabel3;
@@ -898,7 +748,6 @@ public class PsMoveGestureRecognizerTrainingGUI extends javax.swing.JFrame {
     private javax.swing.JPanel panelDebug;
     private javax.swing.JPanel panelExamples;
     private javax.swing.JPanel panelFileManagement;
-    private javax.swing.JPanel panelSelectJoints;
     private javax.swing.JSlider sliderThreshold;
     // End of variables declaration//GEN-END:variables
 }

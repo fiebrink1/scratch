@@ -1,5 +1,5 @@
 /*
- * GUI element for a single gesture row of the Finger Therapy GUI
+ * GUI element for a single gesture row of the Gesture training GUI
  */
 
 /*
@@ -52,11 +52,10 @@ public class GestureRow extends javax.swing.JPanel {
         initComponents();
     }
 
-    public GestureRow(String name, int num, String[] options) {
+    public GestureRow(String name, int num) {
         initComponents();
         setGestureName(name);
         labelNum.setText("x " + num);
-        comboActions.setModel(new DefaultComboBoxModel(options));
     }
 
     public void setNumExamples(int num) {
@@ -130,7 +129,6 @@ public class GestureRow extends javax.swing.JPanel {
         labelNum = new javax.swing.JLabel();
         buttonAdd = new javax.swing.JButton();
         buttonRemove = new javax.swing.JButton();
-        comboActions = new javax.swing.JComboBox();
         radioEnabled = new javax.swing.JRadioButton();
         statusBar = new javax.swing.JProgressBar();
 
@@ -202,18 +200,6 @@ public class GestureRow extends javax.swing.JPanel {
         buttonRemove.setSize(new java.awt.Dimension(30, 30));
         add(buttonRemove);
 
-        comboActions.setFont(new java.awt.Font("Verdana", 0, 13)); // NOI18N
-        comboActions.setModel(new javax.swing.DefaultComboBoxModel(new String[] { "Left" }));
-        comboActions.setMaximumSize(new java.awt.Dimension(120, 40));
-        comboActions.setMinimumSize(new java.awt.Dimension(120, 40));
-        comboActions.setPreferredSize(new java.awt.Dimension(120, 40));
-        comboActions.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                comboActionsActionPerformed(evt);
-            }
-        });
-        add(comboActions);
-
         radioEnabled.setBackground(new java.awt.Color(255, 255, 255));
         radioEnabled.setForeground(new java.awt.Color(255, 0, 0));
         add(radioEnabled);
@@ -231,18 +217,11 @@ public class GestureRow extends javax.swing.JPanel {
         buttonRemove.addMouseListener(a);
     }
 
-    public void addActionChoiceListener(ActionListener a) {
-        comboActions.addActionListener(a);
-    }
-
     private void buttonAddActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonAddActionPerformed
     }//GEN-LAST:event_buttonAddActionPerformed
 
     private void buttonAddMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_buttonAddMouseClicked
     }//GEN-LAST:event_buttonAddMouseClicked
-
-    private void comboActionsActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_comboActionsActionPerformed
-    }//GEN-LAST:event_comboActionsActionPerformed
 
     private void labelNameMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_labelNameMouseClicked
         String s = (String)JOptionPane.showInputDialog(this, "New name?", labelName.getText() );
@@ -259,17 +238,9 @@ public class GestureRow extends javax.swing.JPanel {
         }
     }//GEN-LAST:event_jCheckBox1ActionPerformed
 
-    public String getComboActionChoice() {
-        return (String) comboActions.getSelectedItem();
-    }
-
     //Range: 0 to 100 (do remapping in calling code)
     public void setStatus(int s) {
         statusBar.setValue(s);
-    }
-
-    public void selectAction(int actionIndex) {
-        comboActions.setSelectedIndex(actionIndex);
     }
 
     public static void main(String[] args) {
@@ -282,7 +253,7 @@ public class GestureRow extends javax.swing.JPanel {
                 JFrame frame = new JFrame();
                 frame.setSize(new Dimension(600, 60));
                 String[] labels= {"Left", "Right", "Up", "Down"};
-                final GestureRow panel = new GestureRow("Yo", 20, labels);
+                final GestureRow panel = new GestureRow("Yo", 20);
                 panel.addAddButtonMouseListener(new MouseAdapter() {
 
                     @Override
@@ -325,7 +296,6 @@ public class GestureRow extends javax.swing.JPanel {
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton buttonAdd;
     private javax.swing.JButton buttonRemove;
-    private javax.swing.JComboBox comboActions;
     private javax.swing.JCheckBox jCheckBox1;
     private javax.swing.JPanel jPanel2;
     private javax.swing.JLabel labelName;
