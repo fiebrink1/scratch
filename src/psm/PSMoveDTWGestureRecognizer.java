@@ -1,5 +1,5 @@
 /*
- * Implements Dynamic Time Warping for FingerTherapy project
+ * Implements Dynamic Time Warping for PSMove Gesture Recognizer
  * 
  */
 package psm;
@@ -8,15 +8,15 @@ import com.dtw.TimeWarpInfo;
 import com.illposed.osc.OSCListener;
 import com.illposed.osc.OSCMessage;
 import com.illposed.osc.OSCPortIn;
-import java.beans.PropertyChangeSupport;
-import java.net.SocketException;
-import java.net.UnknownHostException;
-import java.util.LinkedList;
 import com.timeseries.TimeSeries;
 import com.timeseries.TimeSeriesPoint;
 import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
 import java.io.*;
+import java.net.SocketException;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -28,30 +28,55 @@ import javax.swing.event.EventListenerList;
  */
 public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
 
-    protected int receivePort = 6448;
-    int numFeatures = 9;
-    ArrayList<LinkedList<TimeSeries>> allseries;
-    TimeSeries currentTs = new TimeSeries(numFeatures);
-    int currentTime = 0;
-    int currentTrainingLabel = 0;
-    double[] distanceToClasses;
-    double closestDist = Double.MAX_VALUE;
-    int numClasses = 2;
-    boolean isClassActive[];
-    int matchWidth = 5;
-    int minAllowedGestureLength = 5; //This could be changed to tweak DTW behavior
-    int minSizeInExamples = 10;
-    int maxSizeInExamples = 10;
-    double matchThreshold = 3.0;
-    protected double maxDistance;
-    protected int continuousMatch;
-    protected transient OSCPortIn receiver;
-    protected transient RecordingState recordingState = RecordingState.NOT_RECORDING;
-    protected transient RunningState runningState = RunningState.NOT_RUNNING;
-    private transient PropertyChangeSupport propertyChangeSupport = new PropertyChangeSupport(this);
-    protected transient EventListenerList continuousClassificationListenerList = new EventListenerList();
-    private transient ChangeEvent changeEvent = null;
+    protected int receivePort = 6448; //Send PSMove motion data via osc to this port
+    protected String oscReceiveMessage = "/oscCustomFeatures"; //Send PSMove motion data via osc using this message name
+    
+    protected int matchWidth = 5; //This could be changed to tweak DTW behavior
+    protected int minAllowedGestureLength = 5; //This could be changed to tweak DTW behavior
+     
+    
+    protected int numFeatures = 9; //This is set in constructor
+    protected int numClasses = 2; //This is set in constructor
 
+    protected ArrayList<LinkedList<TimeSeries>> allseries;
+    protected TimeSeries currentTs = new TimeSeries(numFeatures);
+    protected int currentTime = 0;
+    protected int currentTrainingLabel = 0;
+    protected double[] distanceToClasses;
+    protected double closestDist = Double.MAX_VALUE;
+    protected boolean isClassActive[];
+    protected int minSizeInExamples = 10; 
+    protected int maxSizeInExamples = 10;
+    protected double matchThreshold = 3.0;
+   
+    protected double maxDistance;
+    protected int continuousMatch; //identity of closest matching class (-1 if no class is above match threshold)
+    protected OSCPortIn receiver;
+    protected RecordingState recordingState = RecordingState.NOT_RECORDING;
+    protected RunningState runningState = RunningState.NOT_RUNNING;
+    private PropertyChangeSupport propertyChangeSupport = new PropertyChangeSupport(this);
+    protected EventListenerList continuousClassificationListenerList = new EventListenerList();
+    private ChangeEvent changeEvent = null;
+
+    // Create new recognizer for # features (e.g., 9 for PS Move), numClasses (e.g., 4 gesture types)
+    public PSMoveDTWGestureRecognizer(int numFeatures, int numClasses) throws SocketException, UnknownHostException, Exception {
+        this.numClasses = numClasses;
+        isClassActive = new boolean[numClasses];
+        for (int i = 0; i < isClassActive.length; i++) {
+            isClassActive[i] = true;
+        }
+        addOscListeners();
+        allseries = new ArrayList<LinkedList<TimeSeries>>(numClasses);
+        distanceToClasses = new double[numClasses];
+        for (int i = 0; i < numClasses; i++) {
+            LinkedList<TimeSeries> l = new LinkedList<TimeSeries>();
+            allseries.add(l);
+            distanceToClasses[i] = Double.MAX_VALUE;
+        }
+    }
+
+    
+    //Phoenix: See this as an example of using ChangeListener to implement observers
     public void addClassificationListener(ChangeListener l) {
         continuousClassificationListenerList.add(ChangeListener.class, l);
     }
@@ -157,9 +182,9 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
     }
 
     /**
-     * Set the value of maxDistance
+     * Set the value of match threshold, tolerance we use to identify a match with any category
      *
-     * @param maxDistance new value of maxDistance
+     * @param matchThreshold new value of match threshold
      */
     public void setMatchThreshold(double matchThreshold) {
         double oldMatchThreshold = this.matchThreshold;
@@ -169,22 +194,8 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
         propertyChangeSupport.firePropertyChange(PROP_MAXTHRESHOLD, oldMatchThreshold, matchThreshold);
     }
 
-    public PSMoveDTWGestureRecognizer(int numFeatures, int numClasses) throws SocketException, UnknownHostException, Exception {
-        this.numClasses = numClasses;
-        isClassActive = new boolean[numClasses];
-        for (int i = 0; i < isClassActive.length; i++) {
-            isClassActive[i] = true;
-        }
-        addOscListeners();
-        allseries = new ArrayList<LinkedList<TimeSeries>>(numClasses);
-        distanceToClasses = new double[numClasses];
-        for (int i = 0; i < numClasses; i++) {
-            LinkedList<TimeSeries> l = new LinkedList<TimeSeries>();
-            allseries.add(l);
-            distanceToClasses[i] = Double.MAX_VALUE;
-        }
-    }
 
+    /* If we're adding a new gesture training example, which class does it belong to? */
     public void setCurrentTrainingLabel(int i) {
         currentTrainingLabel = i;
     }
@@ -193,20 +204,12 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
         return currentTrainingLabel;
     }
 
+    /* Delete all examples for a class */
     public void deleteExamples(int whichClass) {
         LinkedList<TimeSeries> listToClear = allseries.get(whichClass);
         listToClear.clear();
     }
 
-    //Whether Wekinator should add incoming feature vectors to the training set
-    public void startRunningSingle() {
-        if (runningState != RunningState.RUNNING_SINGLE) {
-            //Note: For now, this should be fine even if classifier is untrained / no data.
-            setRunningState(RunningState.RUNNING_SINGLE);
-            currentTime = 0;
-            currentTs = new TimeSeries(numFeatures);
-        }
-    }
 
     protected void updateExampleSizeStats() {
         minSizeInExamples = minAllowedGestureLength;
@@ -225,9 +228,9 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
     }
 
     public void startRunningContinuous() {
-        if (runningState != RunningState.RUNNING_CONTINUOUS) {
+        if (runningState != RunningState.RUNNING) {
             //Note: For now, this should be fine even if classifier is untrained / no data.
-            setRunningState(RunningState.RUNNING_CONTINUOUS);
+            setRunningState(RunningState.RUNNING);
             currentTime = 0;
             currentTs = new TimeSeries(numFeatures);
             updateExampleSizeStats();
@@ -288,7 +291,7 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
     }
 
     public void stopRunning() {
-        if (runningState == RunningState.RUNNING_SINGLE || runningState == RunningState.RUNNING_CONTINUOUS) {
+        if (runningState == RunningState.RUNNING) {
             setRunningState(RunningState.NOT_RUNNING);
         }
     }
@@ -356,21 +359,16 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
                         System.out.println("Warning: Received feature value is not a float");
                     }
                 }
-                // if (tmp % 10 == 0) {
-                // Use this feature vector!
                 if (getRecordingState() == RecordingState.RECORDING) {
                     addTrainingVector(d); //calls newTrainingExampleRecorded
                     //newTrainingExampleRecorded(id);
-                } else if (getRunningState() == RunningState.RUNNING_SINGLE) {
-                    addClassificationVector(d);
-                } else if (getRunningState() == RunningState.RUNNING_CONTINUOUS) {
+                } else if (getRunningState() == RunningState.RUNNING) {
                     addContinuousRunVector(d);
                 }
-                // }//
                 tmp++;
             }
         };
-        receiver.addListener("/oscCustomFeatures", listener);
+        receiver.addListener(oscReceiveMessage, listener);
     }
 
     protected void addTrainingVector(double[] d) {
@@ -401,7 +399,6 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
         list.add(currentTs);
 
         //Update threshold info
-        //TODO: Could just update for this new vector to be more efficient.
         updateMaxDistance();
     }
 
@@ -499,7 +496,7 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
         return l;
     }
 
-    //Used for single classification, not real-time
+    //Used for debugging & single classification, not for real-time
     public int classifyLast() {
         closestDist = Double.MAX_VALUE;
         int closestClass = -1;
@@ -528,13 +525,13 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
 
     public double getLastDistance(int gestureClass) {
         return distanceToClasses[gestureClass];
-        // return closestDist;
     }
 
     public double[] getLastDistances() {
         return distanceToClasses;
     }
 
+    //For debugging only
     public void printState() {
         System.out.println("DTW: " + numClasses + " classes");
         System.out.println("Closest dist: " + closestDist);
@@ -551,12 +548,13 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
         System.out.println(currentTs);
     }
 
+    //Loads state of this recognizer from a file (e.g. gesture.txt)
     public void loadFromFile(File f) throws Exception {
         stopRecording();
         stopRunning();
         
         BufferedReader in = new BufferedReader(new FileReader(f));
-       numFeatures = Integer.parseInt(in.readLine());
+        numFeatures = Integer.parseInt(in.readLine());
         numClasses = Integer.parseInt(in.readLine());
        // PSMoveDTWGestureRecognizer gr = new PSMoveDTWGestureRecognizer(numFeatures, numClasses);
         currentTime = Integer.parseInt(in.readLine());
@@ -584,15 +582,11 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
         System.out.println("Is this TIMESERRIES?" + in.readLine());
         getTimeSeriesFromInput(in);
         
-        currentTs = new TimeSeries(numFeatures);
-
-        
+        currentTs = new TimeSeries(numFeatures);        
         in.close();
-        
-        //TODO: Refresh GUI after this! !!! 
-        //return gr;
     }
 
+    //Write entire state of this object to a file, so you can load it later
     public void writeToFile(File f) throws IOException {
         /*
          * FileOutputStream fout = new FileOutputStream(f); ObjectOutputStream o
@@ -601,8 +595,6 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
          */
         stopRecording();
         stopRunning();
-       
-        
         BufferedWriter writer = new BufferedWriter(new FileWriter(f));
         writer.write(Integer.toString(numFeatures) + "\n");
         writer.write(Integer.toString(numClasses) + "\n");
@@ -633,11 +625,7 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
 
     }
 
-    protected void getTimeSeriesFromInput(BufferedReader in) throws Exception {
-       // ArrayList<LinkedList<TimeSeries>> al = null;
-       // System.out.println("ERROR NOT IMPLEMENTED");
-       // return al;
-        
+    protected void getTimeSeriesFromInput(BufferedReader in) throws Exception {        
         allseries.clear();
         int numAl = Integer.parseInt(in.readLine());
         for (int i = 0; i < numAl; i++)
@@ -702,46 +690,4 @@ public class PSMoveDTWGestureRecognizer implements GestureRecognizer {
         return s.toString();
     }
 
-    public void writeToOutputStream(ObjectOutputStream o) throws IOException {
-        /*
-         * o.writeInt(numParams); o.writeObject(paramUsingDistribution);
-         * o.writeObject(numMaxValsForParameter); // o.writeObject(learners);
-         * for (int i = 0; i < learners.length; i++) { if (learners[i] != null)
-         * { o.writeInt(1); learners[i].writeToOutputStream(o); } }
-         *
-         * if (dataset == null) { o.writeInt(0); } else { o.writeInt(1);
-         * dataset.writeToOutputStreamNew(o); }
-         */
-    }
-
-    public static PSMoveDTWGestureRecognizer loadFromInputStream(ObjectInputStream i) throws IOException, ClassNotFoundException {
-        PSMoveDTWGestureRecognizer gr = null;
-        /*
-         * int numParams = i.readInt(); // ls = new LearningSystem(numParams);
-         * // ls.paramUsingDistribution = (boolean[]) i.readObject(); //TODO:
-         * may have to init this bit by bit... boolean[] paramUsingDistribution
-         * = (boolean[]) i.readObject(); //TODO: may have to init this bit by
-         * bit...
-         *
-         * int[] numMax = (int[]) i.readObject(); //
-         * ls.setNumMaxValsForParameter(numMax); // LearningAlgorithm[] algs =
-         * (LearningAlgorithm[]) i.readObject();
-         *
-         * ls = new LearningSystem(numParams, paramUsingDistribution, numMax);
-         *
-         *
-         * LearningAlgorithm[] algs = new LearningAlgorithm[numParams]; for (int
-         * j = 0; j < numParams; j++) { int hasLearner = i.readInt(); if
-         * (hasLearner == 1) { algs[j] =
-         * LearningAlgorithm.readFromInputStream(i); } else { algs[j] = null; }
-         * }
-         *
-         * ls.setLearners(algs); int flag = i.readInt(); if (flag == 0) {
-         * ls.setDataset(null); } else { SimpleDataset ds =
-         * SimpleDataset.loadFromInputStream(i); ls.setDataset(ds); }
-         * ls.updateDatasetState(); ls.updateTrainable(); ls.updateRunnable();
-         * return ls;
-         */
-        return gr;
-    }
 }

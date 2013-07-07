@@ -1,5 +1,6 @@
 /*
- * Interface for classes that recognize gestures (i.e., DTW, Targeter)
+ * Interface for classes that recognize gestures (i.e., DTW)
+ * 
  */
 package psm;
 
@@ -12,7 +13,7 @@ import javax.swing.event.ChangeListener;
  */
 public interface GestureRecognizer {
 
-    String PROP_CONTINUOUSMATCH = "continuousMatch";
+    String PROP_CONTINUOUSMATCH = "continuousMatch"; // Gesture class of continuous match; -1 if no match
     String PROP_MAXDISTANCE = "maxDistance";
     String PROP_MAXTHRESHOLD = "maxThreshold";
     public static String PROP_RECORDINGSTATE = "recordingState";
@@ -28,9 +29,7 @@ public interface GestureRecognizer {
 
     //Whether Wekinator should be classifying incoming feature vectors
     public enum RunningState {
-
-        RUNNING_SINGLE,
-        RUNNING_CONTINUOUS,
+        RUNNING,
         NOT_RUNNING
     };
 

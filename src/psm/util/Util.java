@@ -3,7 +3,7 @@
  * and open the template in the editor.
  */
 
-package psm;
+package psm.util;
 
 import java.awt.Component;
 import java.io.File;

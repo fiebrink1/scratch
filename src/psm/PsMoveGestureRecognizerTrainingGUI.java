@@ -5,12 +5,13 @@
  */
 
 /*
- * PsMoveGestureSetupGUI.java
+ * PsMoveGestureRecognizerTrainingGUI.java
  *
  * Created on Aug 19, 2011, 4:14:49 PM
  */
 package psm;
 
+import psm.util.FileChooserWithExtension;
 import com.illposed.osc.OSCMessage;
 import com.illposed.osc.OSCPortOut;
 import java.awt.AWTException;
@@ -41,7 +42,7 @@ import javax.swing.event.ChangeListener;
  *
  * @author fiebrink
  */
-public class PsMoveGestureSetupGUI extends javax.swing.JFrame {
+public class PsMoveGestureRecognizerTrainingGUI extends javax.swing.JFrame {
 
     Robot robot;
     PSMoveDTWGestureRecognizer analyzer;
@@ -55,10 +56,6 @@ public class PsMoveGestureSetupGUI extends javax.swing.JFrame {
     OSCPortOut sender;
     protected boolean constantTrigger = false;
 
-    private void updateGestureRecognizer(PSMoveDTWGestureRecognizer gr) {
-            System.out.println("TODO: Not implemented!");
-            //TODO: update member variables, reattach listeners, dispose of old.
-    }
 
     private void updateGUIForLoadedGestureRecognizer() {
         numClasses = analyzer.numClasses;
@@ -104,8 +101,8 @@ public class PsMoveGestureSetupGUI extends javax.swing.JFrame {
     protected ControlMode controlMode = ControlMode.DIRECTION_PAD;
     protected AnalysisMode analysisMode = AnalysisMode.DTW;
 
-    /** Creates new form PsMoveGestureSetupGUI */
-    public PsMoveGestureSetupGUI(String[] gestureNames, final boolean constantTrigger) throws SocketException, UnknownHostException, AWTException, Exception {
+    /** Creates new form PsMoveGestureRecognizerTrainingGUI */
+    public PsMoveGestureRecognizerTrainingGUI(String[] gestureNames, final boolean constantTrigger) throws SocketException, UnknownHostException, AWTException, Exception {
 
         initComponents();
         this.constantTrigger = constantTrigger;
@@ -223,7 +220,7 @@ public class PsMoveGestureSetupGUI extends javax.swing.JFrame {
                 try {
                     sender.send(msg);
                 } catch (IOException ex) {
-                    Logger.getLogger(PsMoveGestureSetupGUI.class.getName()).log(Level.SEVERE, null, ex);
+                    Logger.getLogger(PsMoveGestureRecognizerTrainingGUI.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
         
@@ -600,7 +597,7 @@ public class PsMoveGestureSetupGUI extends javax.swing.JFrame {
                     .add(jButton1)
                     .add(jTextField1, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 30, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                     .add(jButton2))
-                .addContainerGap(36, Short.MAX_VALUE))
+                .addContainerGap(44, Short.MAX_VALUE))
         );
 
         getContentPane().add(panelDebug);
@@ -644,7 +641,7 @@ public class PsMoveGestureSetupGUI extends javax.swing.JFrame {
                     .add(buttonSave)
                     .add(buttonLoad)
                     .add(labelSaveLoadStatus))
-                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addContainerGap(14, Short.MAX_VALUE))
         );
 
         getContentPane().add(panelFileManagement);
@@ -714,7 +711,7 @@ public class PsMoveGestureSetupGUI extends javax.swing.JFrame {
                 labelSaveLoadStatus.setText("Wrote to file " + file.getName());
             } catch (IOException ex) {
                 System.out.println("Problem encountered writing to file");
-                Logger.getLogger(PsMoveGestureSetupGUI.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(PsMoveGestureRecognizerTrainingGUI.class.getName()).log(Level.SEVERE, null, ex);
             }
         
                 
@@ -783,16 +780,16 @@ public class PsMoveGestureSetupGUI extends javax.swing.JFrame {
                 try {
                     UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
                 } catch (Exception ex) {
-                    Logger.getLogger(PsMoveGestureSetupGUI.class.getName()).log(Level.SEVERE, null, ex);
+                    Logger.getLogger(PsMoveGestureRecognizerTrainingGUI.class.getName()).log(Level.SEVERE, null, ex);
                 }
-                PsMoveGestureSetupGUI gui;
+                PsMoveGestureRecognizerTrainingGUI gui;
                 String[] names = {"Gesture1", "Gesture2", "Gesture3", "Gesture4"};
                 try {
                     //if (doDtw) {
-                        gui = new PsMoveGestureSetupGUI(names, true);
+                        gui = new PsMoveGestureRecognizerTrainingGUI(names, true);
                     //} else {
 
-                        //gui = new PsMoveGestureSetupGUI(names, ControlMode.DIRECTION_PAD, AnalysisMode.TARGET, true);
+                        //gui = new PsMoveGestureRecognizerTrainingGUI(names, ControlMode.DIRECTION_PAD, AnalysisMode.TARGET, true);
 
                     //}
                 } catch (Exception ex) {

@@ -2,8 +2,9 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package psm;
+package psm.util;
 
+import psm.util.Util;
 import java.io.File;
 import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
